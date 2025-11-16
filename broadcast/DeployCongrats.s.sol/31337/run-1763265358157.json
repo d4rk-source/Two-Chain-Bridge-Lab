@@ -1,0 +1,34 @@
+{
+  "transactions": [
+    {
+      "hash": null,
+      "transactionType": "CREATE",
+      "contractName": "Congrats",
+      "contractAddress": "0x5b73c5498c1e3b4dba84de0f1833c4a029d90519",
+      "function": null,
+      "arguments": null,
+      "transaction": {
+        "from": "0x1804c8ab1f12e6bbf3894d4083f33e07309d1f38",
+        "gas": "0x2388f",
+        "value": "0x0",
+        "input": "0x6080604052348015600e575f5ffd5b5061010f8061001c5f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f3560e01c80630faf111914602a575b5f5ffd5b60306032565b005b7fd41d6a8583a62859dcb5f622278a41c506ac1b8bc60ff7fe6ebe68357c6f03e2604051605d9060bd565b60405180910390a1565b5f82825260208201905092915050565b7f636f6e67726174732c20796f752072656163686564206d6500000000000000005f82015250565b5f60a96018836067565b915060b2826077565b602082019050919050565b5f6020820190508181035f83015260d281609f565b905091905056fea26469706673582212202f620b420816928876fd2abb2985d39c0ee258dc2ecde6c32bdcfc2cad3b59e464736f6c634300081e0033",
+        "nonce": "0x0",
+        "chainId": "0x7a69"
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [],
+  "returns": {
+    "0": {
+      "internal_type": "address",
+      "value": "0x5b73C5498c1E3b4dbA84de0F1833c4a029d90519"
+    }
+  },
+  "timestamp": 1763265358157,
+  "chain": 31337,
+  "commit": "a223da2"
+}
