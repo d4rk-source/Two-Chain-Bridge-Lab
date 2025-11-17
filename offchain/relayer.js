@@ -50,8 +50,13 @@ const LOCK_AND_SWAP_ABI = [
 ];
 
 const WETH_BRIDGE_ABI = [
-  "function bridge(address to, uint256 amount)"
+  "function bridge(address to, uint256 amount)",
+  // burn is owner-only on the WETH contract
+  "function burn(address from, uint256 amount)"
 ];
+
+// Also listen for Withdraw events emitted by LockAndSwap (user or owner withdrawals)
+LOCK_AND_SWAP_ABI.push("event Withdraw(address indexed account, uint256 amount)");
 
 async function main() {
   const providerA = new ethers.JsonRpcProvider(CHAIN_A_RPC);
@@ -113,6 +118,32 @@ async function main() {
     }
   }
 
+  async function handleWithdrawEvent(account, amount, event) {
+    const txHash = event && event.transactionHash ? event.transactionHash : null;
+    if (txHash && processed.has(txHash)) {
+      console.log("Skipping already-processed withdraw event tx:", txHash);
+      return;
+    }
+
+    try {
+      console.log("\n[Event] Withdraw - account:", account, "amount:", amount.toString(), "tx:", txHash);
+
+      // Call burn on Chain B WETH contract to reflect withdraw (burn tokens from account)
+      console.log("Calling burn on Chain B -> from:", account, "amount:", amount.toString());
+      const tx = await contractB.burn(account, amount, { gasLimit: 300000 });
+      console.log("Sent burn tx:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("Burn tx confirmed. status:", receipt.status);
+
+      if (txHash) {
+        processed.add(txHash);
+        persistProcessed();
+      }
+    } catch (err) {
+      console.error("Error handling Withdraw event:", err);
+    }
+  }
+
   // catch up on past events (in case relayer started after events were emitted)
   try {
     const filter = contractA.filters ? contractA.filters.SwapLocked() : null;
@@ -129,8 +160,26 @@ async function main() {
     console.error("Error during catch-up event processing:", e);
   }
 
+  // Also catch-up Withdraw events
+  try {
+    const withdrawFilter = contractA.filters ? contractA.filters.Withdraw() : null;
+    if (withdrawFilter) {
+      const fromBlock = 0;
+      const wEvents = await contractA.queryFilter(withdrawFilter, fromBlock, "latest");
+      if (wEvents && wEvents.length) console.log("Processing", wEvents.length, "historical Withdraw events...");
+      for (const ev of wEvents) {
+        // ev.args: [account, amount]
+        await handleWithdrawEvent(ev.args[0], ev.args[1], ev);
+      }
+    }
+  } catch (e) {
+    console.error("Error during Withdraw catch-up processing:", e);
+  }
+
   // Listen for SwapLocked events (live)
   contractA.on("SwapLocked", handleEvent);
+  // Listen for Withdraw events (live)
+  contractA.on("Withdraw", handleWithdrawEvent);
 
   // Graceful shutdown
   process.on("SIGINT", () => {

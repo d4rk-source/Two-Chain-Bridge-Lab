@@ -31,20 +31,8 @@ PID_ANVIL_B=$!
 disown $PID_ANVIL_B
 echo "Anvil B started (pid=$PID_ANVIL_B), logs: $ANVIL_B_LOG"
 
+# wait for Anvil to start
 sleep 0.5
-
-# echo "Waiting for RPC endpoints to be ready..."
-# wait_for_rpc() {
-#   local rpc=$1
-#   until curl -s -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' "$rpc" | grep -q "result"; do
-#     sleep 0.2
-#   done
-# }
-
-# wait_for_rpc "$ANVIL_A_RPC"
-# wait_for_rpc "$ANVIL_B_RPC"
-
-# echo "RPCs are ready. Deploying contracts..."
 
 # Deploy LockAndSwap on Chain A
 echo "Deploying LockAndSwap to $ANVIL_A_RPC (logs -> $DEPLOY_A_LOG)"

@@ -5,12 +5,12 @@ Relayer configured:
  Chain B contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
  Listening for SwapLocked events on Chain A...
 
-[Event] SwapLocked - sender: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 21000000000000000000 tx: null
-Calling bridge on Chain B -> to: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 21000000000000000000
-Sent bridge tx: 0x0188444d335a9817be0474300af5ef1bcf390be6d016306e10845c43882dd869
-Bridge tx confirmed. status: 1
-
 [Event] SwapLocked - sender: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 79000000000000000000 tx: null
 Calling bridge on Chain B -> to: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 79000000000000000000
-Sent bridge tx: 0x43263e18b3bafa379a8885087cba10b0b363c9a84519011b9127a68087d453dc
+Sent bridge tx: 0xd73a0398d1a70fcff982d522b9b89970fa6a4b1d399d244eece139fd13a9a98c
 Bridge tx confirmed. status: 1
+
+[Event] Withdraw - account: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 69000000000000000000 tx: null
+Calling burn on Chain B -> from: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 69000000000000000000
+Sent burn tx: 0x333752f41e679a5de4a6478d9da0864750fed16f4d2c6e4cf511b759f4f81545
+Burn tx confirmed. status: 1

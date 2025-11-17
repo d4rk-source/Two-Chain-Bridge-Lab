@@ -1,7 +1,7 @@
 No files changed, compilation skipped
 Warning: Detected artifacts built from source files that no longer exist. Run `forge clean` to make sure builds are in sync with project files.
- - /home/d4rk/my_folder/dedsec/my_github/Bridge_ctf/src/Congrats.sol
  - /home/d4rk/my_folder/dedsec/my_github/Bridge_ctf/script/DeployCongrats.s.sol
+ - /home/d4rk/my_folder/dedsec/my_github/Bridge_ctf/src/Congrats.sol
 Script ran successfully.
 
 == Return ==
@@ -18,9 +18,9 @@ Chain 31337
 
 Estimated gas price: 2.000000001 gwei
 
-Estimated total gas used for script: 923249
+Estimated total gas used for script: 1229627
 
-Estimated amount required: 0.001846498000923249 ETH
+Estimated amount required: 0.002459254001229627 ETH
 
 ==========================
 

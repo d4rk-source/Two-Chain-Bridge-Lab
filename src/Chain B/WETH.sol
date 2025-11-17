@@ -19,21 +19,11 @@ contract WETH is ERC20, Ownable {
         bridgeAddress = msg.sender;
     }
 
-    receive() external payable {
-        _mint(msg.sender, msg.value);
-    }
-
-    /// @notice Deposit ETH and receive WETH tokens
-    function deposit() external payable {
-        _mint(msg.sender, msg.value);
-    }
-
-    /// @notice Withdraw ETH by burning WETH tokens
-    /// @param amount Amount of WETH (in wei) to burn and withdraw
-    function withdraw(uint256 amount) external {
-        _burn(msg.sender, amount);
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
-        require(success, "WETH: ETH transfer failed");
+    /// @notice Owner-only burn function to destroy tokens from a given address.
+    /// @param from Address whose tokens will be burned.
+    /// @param amount Amount to burn (in token wei).
+    function burn(address from, uint256 amount) external onlyOwner {
+        _burn(from, amount);
     }
 
     /// @notice Privileged bridge mint function. Only callable by `bridgeAddress`.

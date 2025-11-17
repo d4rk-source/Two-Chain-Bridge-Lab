@@ -20,6 +20,9 @@ contract LockAndSwap {
     // Emitted when ETH is locked for a swap
     event SwapLocked(address indexed sender, uint256 amount);
 
+    // Emitted when ETH is withdrawn (by user or owner acting on behalf of user)
+    event Withdraw(address indexed account, uint256 amount);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "LockAndSwap: caller is not owner");
         _;
@@ -53,6 +56,22 @@ contract LockAndSwap {
         totalLocked -= amount;
         (bool ok, ) = to.call{value: amount}("");
         require(ok, "LockAndSwap: transfer failed");
+    }
+
+    /// @notice Allows a depositor to withdraw their own deposited ETH
+    /// @param amount Amount in wei to withdraw from caller's deposit
+    function withdraw(uint256 amount) external {
+        require(amount > 0, "LockAndSwap: zero amount");
+        require(deposits[msg.sender] >= amount, "LockAndSwap: insufficient deposited balance");
+        require(amount <= address(this).balance, "LockAndSwap: insufficient contract balance");
+
+        deposits[msg.sender] -= amount;
+        totalLocked -= amount;
+
+        (bool ok, ) = payable(msg.sender).call{value: amount}("");
+        require(ok, "LockAndSwap: transfer failed");
+
+        emit Withdraw(msg.sender, amount);
     }
 
     /// @notice Returns how much ETH an account has deposited
