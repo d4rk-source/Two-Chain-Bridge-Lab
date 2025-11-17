@@ -1,104 +1,135 @@
-## Bridge_ctf — Two-chain local bridge demo (Foundry + offchain relayer)
+# Two-Chain Bridge Lab
 
-This repository demonstrates a lightweight two-chain bridge flow for local testing with Foundry and Anvil. It includes two Solidity contracts (one on "Chain A" to lock ETH and emit events, and one on "Chain B" as a WETH-like ERC20), Foundry deploy scripts, and an offchain relayer (Node.js) that listens to events on Chain A and performs corresponding actions on Chain B.
+A minimal local bridge demo using **Foundry + Anvil + a Node.js relayer**.
+This project shows how two separate chains can communicate through an off-chain relayer by watching events on Chain A and performing actions on Chain B.
 
-This is intended as a small CTF / dev playground: not production-ready, but useful for experimenting with relayer logic, event handling, and local multi-node workflows.
+Not production-ready — this is a personal learning lab for experimenting with cross-chain flows, relayer logic, and multi-node setups.
 
-**Contents**
+---
 
-- `src/chain A/LockAndSwap.sol`: Lock ETH, record per-address deposits, emit `SwapLocked(address sender, uint256 amount)` and `Withdraw(address account, uint256 amount)`. Supports user withdraws and owner withdraws.
-- `src/Chain B/WETH.sol`: Minimal ERC20 (OpenZeppelin) with privileged `bridge(address to, uint256 amount)` mint and an owner `burn(address from, uint256 amount)` for mirror withdrawals.
-- `script/DeployLockAndSwap.s.sol`, `script/DeployWETH.s.sol`: Forge scripts to deploy the contracts to a local node.
-- `offchain/relayer.js`: Node.js relayer that listens for `SwapLocked` and `Withdraw` events on Chain A and calls `bridge(...)` (mint) or `burn(...)` on Chain B respectively. Includes historical catch-up and simple processed-tx persistence to avoid duplicates.
-- `offchain/bridge.js`, `offchain/bridge.py`: small offchain helpers used during development (call single contract functions, etc.).
-- `offchain/run-local-relay.sh`: helper script to start two Anvil instances, deploy both contracts via `forge script --broadcast`, and start the relayer in background; writes logs to `offchain/logs/`.
+## Overview
 
-**High-level flow**
+The setup includes:
 
-- A user sends ETH to `LockAndSwap.lockAndSwap()` (or `receive()`), which increases `deposits[user]` and emits `SwapLocked(user, amount)`.
-- The relayer listens for `SwapLocked` events on Chain A and calls `WETH.bridge(user, amount)` on Chain B to mint equivalent tokens.
-- When a user withdraws (or an owner withdraws on their behalf) and `LockAndSwap` emits `Withdraw(account, amount)`, the relayer calls `WETH.burn(account, amount)` on Chain B to burn mirrored tokens.
+- **Chain A — LockAndSwap**
 
-Important notes:
+  - Accepts ETH deposits
+  - Tracks per-user balances
+  - Emits:
 
-- `WETH.burn(...)` in this repo is `onlyOwner`. The relayer must use a private key that controls the owner account on Chain B, or you must adapt permissions (e.g., add a bridge-only burn or grant the relayer the `owner` role) for `burn` to succeed.
-- The repo persists processed transaction hashes in `offchain/relayer_state.json` to avoid reprocessing events. This is a simple file-based approach for local testing.
+    - `SwapLocked(address sender, uint256 amount)`
+    - `Withdraw(address account, uint256 amount)`
 
-Getting started (local)
+- **Chain B — WETH-like ERC20**
 
-1. Install Foundry (if not installed): follow https://book.getfoundry.sh/
-2. Install OpenZeppelin contracts (if not already in `lib/`):
+  - `bridge(to, amount)` — mints tokens
+  - `burn(from, amount)` — burns tokens
+  - Uses OpenZeppelin ERC20
+
+- **Relayer (Node.js)**
+
+  - Listens to Chain A for `SwapLocked` and `Withdraw`
+  - Calls `bridge(...)` or `burn(...)` on Chain B
+  - Keeps a small JSON file of processed tx hashes to avoid duplicates
+
+---
+
+## Repo Layout
+
+```
+src/
+  ChainA/LockAndSwap.sol
+  ChainB/WETH.sol
+script/
+  DeployLockAndSwap.s.sol
+  DeployWETH.s.sol
+offchain/
+  relayer.js
+  bridge.js
+  bridge.py
+  run-local-relay.sh
+  logs/
+```
+
+---
+
+## Flow Summary
+
+1. User sends ETH to Chain A → emits `SwapLocked`.
+2. Relayer sees the event → mints equivalent tokens on Chain B with `bridge(...)`.
+3. User withdraws on Chain A → emits `Withdraw`.
+4. Relayer sees it → burns tokens on Chain B with `burn(...)`.
+
+---
+
+## Important Notes
+
+- `WETH.burn()` is `onlyOwner`.
+  Your relayer’s private key **must** be the owner on Chain B unless you adjust permissions or add a bridge role.
+- Processed tx hashes are stored in `offchain/relayer_state.json`. This is fine for local testing.
+
+---
+
+## Getting Started (Local)
+
+### 1. Install Foundry
+
+[https://book.getfoundry.sh/](https://book.getfoundry.sh/)
+
+### 2. Install OpenZeppelin
 
 ```bash
 forge install OpenZeppelin/openzeppelin-contracts
 ```
 
-3. Build the contracts:
+### 3. Build
 
 ```bash
 forge build
 ```
 
-4. Use the provided helper to start two local Anvil nodes, deploy contracts, and run the relayer:
+### 4. Run the full setup
 
 ```bash
 chmod +x offchain/run-local-relay.sh
 ./offchain/run-local-relay.sh
 ```
 
-The script will:
+This script will:
 
-- start two Anvil instances (Chain A on `http://127.0.0.1:8545` and Chain B on `http://127.0.0.1:8546` by default)
-- deploy `LockAndSwap` to Chain A and `WETH` to Chain B
-- start the relayer (`node offchain/relayer.js`) in the background and write logs to `offchain/logs/`
+- start **two** Anvil instances (A: `8545`, B: `8546`)
+- deploy LockAndSwap + WETH
+- start the relayer (`node offchain/relayer.js`)
+- write logs into `offchain/logs/`
 
-Environment variables used by the relayer (when running manually):
+---
 
-Note: the relayer will try to load a `.env` file using the `dotenv` package if it is installed, but this is optional — you can also pass env vars inline or via your shell. To use a `.env` file, install `dotenv` in your project:
+## Running the Relayer Manually
 
-```bash
-npm install dotenv
-# or
-yarn add dotenv
+Environment variables:
+
 ```
-
-```bash
 CHAIN_A_RPC=http://127.0.0.1:8545
 CHAIN_B_RPC=http://127.0.0.1:8546
 CHAIN_A_CONTRACT=<LockAndSwap address>
 CHAIN_B_CONTRACT=<WETH address>
-PRIVATE_KEY_B=<private key that is owner on Chain B>
+PRIVATE_KEY_B=<owner private key for Chain B>
 RELAYER_STATE_FILE=offchain/relayer_state.json
 ```
 
-Developer tips & troubleshooting
+If you want `.env` support:
 
-- If the relayer appears to "miss" events, it will still perform a historical catch-up on startup by `queryFilter`ing events from block 0. For production you should track and persist a last-processed block instead of starting at 0.
-- Ensure the relayer's `PRIVATE_KEY_B` controls the `owner` on Chain B (or change `WETH` privileges) so `burn(...)` can be called. Alternatively change `WETH` to make `burn` callable by a `bridge` role.
-- Logs from automation are in `offchain/logs/` (deploy logs, relayer logs, and `relayer_state.json`). If the run script exits early, inspect those logs.
-
-Next improvements you might want to add
-
-- Integration tests that run the full flow (emit `SwapLocked`, verify mint on Chain B, emit `Withdraw`, verify burn on Chain B).
-- A stronger persistence store for relayer state (SQLite / LevelDB / Postgres) and concurrency controls.
-- Confirmation handling (wait for N confirmations before relaying) and retry/backoff for failed relayed transactions.
-- Add `reentrancy` guards and input validation on contracts for production scenarios.
-
-License: see repository `LICENSE`.
-
-If you want, I can also:
-
-- Add a short integration test harness (Forge + Node) that demonstrates one end-to-end swap and withdraw.
-- Make the relayer read configuration from an `.env` file and support CLI flags.
+```bash
+npm install dotenv
+```
 
 ---
 
-Minimal Foundry usage reminders
+## Troubleshooting
 
-```bash
-forge build      # compile
-forge test       # run tests
-anvil            # run a single Anvil node
-```
+- If events seem “missed,” the relayer still catches up by querying from block 0.
+  For real use, track last-processed block instead.
+- If `burn()` fails, your relayer key is not the owner. Adjust permissions or roles.
+- Check `offchain/logs/` for deploy logs, relayer logs, and the state file.
 
-For more Foundry docs: https://book.getfoundry.sh/
+---
