@@ -3,15 +3,15 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
-import "../src/Congrats.sol";
+import "../src/chain A/LockAndSwap.sol";
 
-contract DeployCongrats is Script {
+contract DeployLockAndSwap is Script {
     function run() external returns (address) {
         vm.startBroadcast();
-        Congrats c = new Congrats();
+        LockAndSwap s = new LockAndSwap();
         vm.stopBroadcast();
 
-        console.log("Congrats deployed at", address(c));
-        return address(c);
+        console.log("LockAndSwap deployed at", address(s));
+        return address(s);
     }
 }

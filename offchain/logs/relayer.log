@@ -1,0 +1,16 @@
+Relayer configured:
+ Chain A RPC: http://127.0.0.1:8545
+ Chain B RPC: http://127.0.0.1:8546
+ Chain A contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+ Chain B contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+ Listening for SwapLocked events on Chain A...
+
+[Event] SwapLocked - sender: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 21000000000000000000 tx: null
+Calling bridge on Chain B -> to: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 21000000000000000000
+Sent bridge tx: 0x0188444d335a9817be0474300af5ef1bcf390be6d016306e10845c43882dd869
+Bridge tx confirmed. status: 1
+
+[Event] SwapLocked - sender: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 79000000000000000000 tx: null
+Calling bridge on Chain B -> to: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 amount: 79000000000000000000
+Sent bridge tx: 0x43263e18b3bafa379a8885087cba10b0b363c9a84519011b9127a68087d453dc
+Bridge tx confirmed. status: 1
