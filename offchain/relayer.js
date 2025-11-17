@@ -25,18 +25,27 @@ let ethersPkg = require("ethers");
 if (ethersPkg.ethers) ethersPkg = ethersPkg.ethers;
 const ethers = ethersPkg;
 
-const CHAIN_A_RPC = "http://127.0.0.1:8545"; // <-- put Chain A RPC here
-const CHAIN_B_RPC = "http://127.0.0.1:8546"; // <-- put Chain B RPC here
-const CHAIN_A_CONTRACT = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const CHAIN_B_CONTRACT = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const PRIVATE_KEY_B = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+// Load .env if present (optional)
+try {
+  require('dotenv').config();
+} catch (e) {
+  // dotenv is optional; ignore if not installed
+}
+
+// Configuration from environment variables with sensible defaults for local dev
+const CHAIN_A_RPC = process.env.CHAIN_A_RPC || "http://127.0.0.1:8545";
+const CHAIN_B_RPC = process.env.CHAIN_B_RPC || "http://127.0.0.1:8546";
+const CHAIN_A_CONTRACT = process.env.CHAIN_A_CONTRACT || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const CHAIN_B_CONTRACT = process.env.CHAIN_B_CONTRACT || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const PRIVATE_KEY_B = process.env.PRIVATE_KEY_B || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const STATE_FILE = process.env.RELAYER_STATE_FILE || "offchain/relayer_state.json";
 
 if (!CHAIN_A_CONTRACT) {
-  console.error("Missing CHAIN_A_CONTRACT env var (LockAndSwap address on Chain A)");
+  console.error("Missing CHAIN_A_CONTRACT (LockAndSwap address on Chain A)");
   process.exit(1);
 }
 if (!CHAIN_B_CONTRACT) {
-  console.error("Missing CHAIN_B_CONTRACT env var (WETH/bridge address on Chain B)");
+  console.error("Missing CHAIN_B_CONTRACT (WETH/bridge address on Chain B)");
   process.exit(1);
 }
 if (!PRIVATE_KEY_B) {
@@ -74,7 +83,7 @@ async function main() {
   console.log(" Listening for SwapLocked events on Chain A...");
 
   // persisted processed tx hashes to avoid double-processing
-  const stateFile = "offchain/relayer_state.json";
+  const stateFile = STATE_FILE;
   let processed = new Set();
   try {
     const s = require("fs").readFileSync(stateFile, "utf8");
