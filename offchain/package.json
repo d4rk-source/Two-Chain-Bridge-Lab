@@ -1,0 +1,20 @@
+{
+  "name": "bridge-ctf-relayer",
+  "version": "1.0.0",
+  "description": "Off-chain relayer for the Bridge CTF homelab project",
+  "main": "relayer.js",
+  "scripts": {
+    "start": "node relayer.js",
+    "dev": "../offchain/run-local-relay.sh"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0"
+  },
+  "optionalDependencies": {
+    "dotenv": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

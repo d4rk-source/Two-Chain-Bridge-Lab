@@ -1,94 +1,142 @@
-# Two-Chain Bridge Lab
+# Two-Chain Bridge — Homelab Project
 
-A minimal local bridge demo using **Foundry + Anvil + a Node.js relayer**.
-This project shows how two separate chains can communicate through an off-chain relayer by watching events on Chain A and performing actions on Chain B.
+A local cross-chain bridge built from scratch to practice smart contract development, event-driven off-chain architecture, and the Foundry toolchain. Two independent EVM chains communicate through an event-listening relayer: lock ETH on Chain A, receive a wrapped token on Chain B. Withdraw on Chain A, tokens are burned on Chain B.
 
-Not production-ready — this is a personal learning lab for experimenting with cross-chain flows, relayer logic, and multi-node setups.
-
----
-
-## Overview
-
-The setup includes:
-
-- **Chain A — LockAndSwap**
-
-  - Accepts ETH deposits
-  - Tracks per-user balances
-  - Emits:
-
-    - `SwapLocked(address sender, uint256 amount)`
-    - `Withdraw(address account, uint256 amount)`
-
-- **Chain B — WETH-like ERC20**
-
-  - `bridge(to, amount)` — mints tokens
-  - `burn(from, amount)` — burns tokens
-  - Uses OpenZeppelin ERC20
-
-- **Relayer (Node.js)**
-
-  - Listens to Chain A for `SwapLocked` and `Withdraw`
-  - Calls `bridge(...)` or `burn(...)` on Chain B
-  - Keeps a small JSON file of processed tx hashes to avoid duplicates
+**Stack:** Solidity 0.8.20 · Foundry · Anvil · Node.js (ethers v6) · OpenZeppelin
 
 ---
 
-## Repo Layout
+## Architecture
 
 ```
-src/
-  ChainA/LockAndSwap.sol
-  ChainB/WETH.sol
-script/
-  DeployLockAndSwap.s.sol
-  DeployWETH.s.sol
-offchain/
-  relayer.js
-  bridge.js
-  bridge.py
-  run-local-relay.sh
-  logs/
+┌──────────────────────────────────┐        ┌──────────────────────────────────┐
+│           CHAIN A (Anvil :8545)  │        │          CHAIN B (Anvil :8546)   │
+│                                  │        │                                  │
+│  LockAndSwap.sol                 │        │  WETH.sol  (ERC20)               │
+│  ┌─────────────────────────┐     │        │  ┌─────────────────────────┐     │
+│  │ lockAndSwap() payable   │     │        │  │ bridge(to, amount)      │     │
+│  │ withdraw(amount)        │     │        │  │   → _mint               │     │
+│  │ emergencyWithdraw(...)  │     │        │  │ burn(from, amount)      │     │
+│  │ deposits[addr]          │     │        │  │   → _burn               │     │
+│  └────────────┬────────────┘     │        │  └────────────▲────────────┘     │
+│               │ events           │        │               │ calls            │
+└───────────────┼──────────────────┘        └───────────────┼──────────────────┘
+                │                                           │
+                │  ┌────────────────────────────────────┐   │
+                └──►       relayer.js (Node.js)         ├───┘
+                   │                                    │
+                   │  - listens: SwapLocked → bridge()  │
+                   │  - listens: Withdraw   → burn()    │
+                   │  - dedup via tx hash set           │
+                   │  - catch-up from saved block       │
+                   │  - retry with exponential backoff  │
+                   └────────────────────────────────────┘
 ```
 
----
+### Flow
 
-## Flow Summary
-
-1. User sends ETH to Chain A → emits `SwapLocked`.
-2. Relayer sees the event → mints equivalent tokens on Chain B with `bridge(...)`.
-3. User withdraws on Chain A → emits `Withdraw`.
-4. Relayer sees it → burns tokens on Chain B with `burn(...)`.
+| Step | Action                              | Chain A                       | Relayer       | Chain B                                   |
+| ---- | ----------------------------------- | ----------------------------- | ------------- | ----------------------------------------- |
+| 1    | User calls `lockAndSwap()` with ETH | emits `SwapLocked`            | detects event | calls `bridge(user, amount)` → mints WETH |
+| 2    | User calls `withdraw(amount)`       | emits `Withdraw`, returns ETH | detects event | calls `burn(user, amount)` → burns WETH   |
 
 ---
 
-## Important Notes
+## Contracts
 
-- `WETH.burn()` is `onlyOwner`.
-  Your relayer’s private key **must** be the owner on Chain B unless you adjust permissions or add a bridge role.
-- Processed tx hashes are stored in `offchain/relayer_state.json`. This is fine for local testing.
+### `LockAndSwap.sol` (Chain A)
+
+| Symbol                                | Description                                  |
+| ------------------------------------- | -------------------------------------------- |
+| `lockAndSwap() payable`               | Lock ETH and emit `SwapLocked`               |
+| `receive() payable`                   | Fallback — same effect as `lockAndSwap()`    |
+| `withdraw(uint256)`                   | Return depositor's own ETH; emits `Withdraw` |
+| `emergencyWithdraw(address, uint256)` | Owner-only emergency drain                   |
+| `setOwner(address)`                   | Transfer ownership                           |
+| `deposits[addr]`                      | Per-address deposit tracking                 |
+| `totalLocked`                         | Sum of all tracked ETH in contract           |
+
+Notable practices:
+
+- `ReentrancyGuard` on all ETH-sending paths (belt-and-suspenders on top of CEI)
+- Custom errors (`ZeroValue`, `NotOwner`, etc.) instead of revert strings — lower gas, cleaner ABI
+- `OwnershipTransferred` event mirrors the OZ Ownable convention
+- Internal `_lock()` helper keeps `lockAndSwap()` and `receive()` DRY
+
+### `WETH.sol` (Chain B)
+
+Extends OpenZeppelin `ERC20` + `Ownable`. Minted and burned exclusively by the bridge relayer.
+
+| Symbol                     | Description                       |
+| -------------------------- | --------------------------------- |
+| `bridge(address, uint256)` | Mint tokens — `onlyBridge`        |
+| `burn(address, uint256)`   | Burn tokens — `onlyBridge`        |
+| `setBridge(address)`       | Owner updates the relayer address |
+
+Both `bridge()` and `burn()` are restricted to `bridgeAddress` (the relayer), keeping the permission model symmetric. The owner (deployer) manages the bridge address but cannot mint or burn directly after `setBridge` is called.
 
 ---
 
-## Getting Started (Local)
+## Tests
 
-### 1. Install Foundry
+43 Foundry tests covering unit behaviour, access control, edge cases, and fuzz cases.
 
-[https://book.getfoundry.sh/](https://book.getfoundry.sh/)
+```
+test/LockAndSwap.t.sol   27 tests
+test/WETH.t.sol          16 tests
+```
 
-### 2. Install OpenZeppelin
+```bash
+forge test
+```
+
+```
+Ran 43 tests: 43 passed, 0 failed
+```
+
+Test highlights:
+
+- **Fuzz** — `testFuzz_lockAndSwap_tracksDeposit(uint96)` and `testFuzz_withdraw_partialAmount(uint96,uint96)` run 256 randomised inputs each
+- **Access control** — every `onlyOwner` / `onlyBridge` path has a negative test
+- **State invariants** — `totalLocked`, `deposits[addr]`, and contract balance are checked together after each operation
+- **Event assertions** — `vm.expectEmit` verifies every event emission
+
+---
+
+## Relayer (`offchain/relayer.js`)
+
+- Listens for `SwapLocked` and `Withdraw` events on Chain A using ethers v6
+- Calls `bridge()` / `burn()` on Chain B via a configured wallet
+- **Deduplication:** processed tx hashes are saved to a JSON state file — safe to restart
+- **Catch-up:** on startup, queries all historical events from the last saved block
+- **Retry:** failed transactions are retried up to 3 times with exponential backoff
+- **Graceful shutdown:** `SIGINT` / `SIGTERM` flush state before exit
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- [Foundry](https://book.getfoundry.sh/) (`forge`, `anvil`, `cast`)
+- Node.js ≥ 18
+- OpenZeppelin contracts (installed once below)
+
+### 1 — Install dependencies
 
 ```bash
 forge install OpenZeppelin/openzeppelin-contracts
+cd offchain && npm install && cd ..
 ```
 
-### 3. Build
+### 2 — Build and test
 
 ```bash
 forge build
+forge test
 ```
 
-### 4. Run the full setup
+### 3 — Run the full local setup
 
 ```bash
 chmod +x offchain/run-local-relay.sh
@@ -97,39 +145,73 @@ chmod +x offchain/run-local-relay.sh
 
 This script will:
 
-- start **two** Anvil instances (A: `8545`, B: `8546`)
-- deploy LockAndSwap + WETH
-- start the relayer (`node offchain/relayer.js`)
-- write logs into `offchain/logs/`
+1. Start two Anvil nodes (Chain A on `:8545`, Chain B on `:8546`)
+2. Deploy `LockAndSwap` and `WETH` using the default Anvil dev key
+3. Start the relayer in the background
+4. Print all PIDs and contract addresses
 
----
+Logs land in `offchain/logs/`.
 
-## Running the Relayer Manually
+### 4 — Try it manually
 
-Environment variables:
-
-```
-CHAIN_A_RPC=http://127.0.0.1:8545
-CHAIN_B_RPC=http://127.0.0.1:8546
-CHAIN_A_CONTRACT=<LockAndSwap address>
-CHAIN_B_CONTRACT=<WETH address>
-PRIVATE_KEY_B=<owner private key for Chain B>
-RELAYER_STATE_FILE=offchain/relayer_state.json
-```
-
-If you want `.env` support:
+After the setup script runs, grab the deployed addresses from its output and use `cast` to interact:
 
 ```bash
-npm install dotenv
+# Lock 0.1 ETH on Chain A (triggers mint on Chain B)
+cast send <LOCK_AND_SWAP_ADDR> "lockAndSwap()" \
+  --value 0.1ether \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8545
+
+# Check WETH balance on Chain B
+cast call <WETH_ADDR> "balanceOf(address)(uint256)" <YOUR_ADDRESS> \
+  --rpc-url http://127.0.0.1:8546
 ```
 
 ---
 
-## Troubleshooting
+## Relayer — Manual Configuration
 
-- If events seem “missed,” the relayer still catches up by querying from block 0.
-  For real use, track last-processed block instead.
-- If `burn()` fails, your relayer key is not the owner. Adjust permissions or roles.
-- Check `offchain/logs/` for deploy logs, relayer logs, and the state file.
+```bash
+CHAIN_A_RPC=http://127.0.0.1:8545 \
+CHAIN_B_RPC=http://127.0.0.1:8546 \
+CHAIN_A_CONTRACT=<LockAndSwap address> \
+CHAIN_B_CONTRACT=<WETH address> \
+PRIVATE_KEY_B=<relayer private key> \
+node offchain/relayer.js
+```
+
+The relayer's key must be the `bridgeAddress` on the WETH contract. The `run-local-relay.sh` script handles this automatically.
 
 ---
+
+## Project Layout
+
+```
+src/
+  chainA/LockAndSwap.sol    Chain A — ETH lock/unlock
+  chainB/WETH.sol           Chain B — ERC20 bridge token
+script/
+  DeployLockAndSwap.s.sol
+  DeployWETH.s.sol
+test/
+  LockAndSwap.t.sol         27 unit + fuzz tests
+  WETH.t.sol                16 unit + fuzz tests
+offchain/
+  relayer.js                Off-chain event relayer
+  run-local-relay.sh        One-command local demo
+  package.json
+  logs/                     Runtime logs (gitignored)
+```
+
+---
+
+## What This Is Not
+
+This is a **homelab / learning project**, not a production bridge. Notable omissions:
+
+- No finality waiting — the relayer acts on the first confirmation
+- No challenge/fraud-proof mechanism
+- No fee model
+- Single relayer = single point of failure
+- `emergencyWithdraw` does not update per-user deposit records (documented intentionally)
